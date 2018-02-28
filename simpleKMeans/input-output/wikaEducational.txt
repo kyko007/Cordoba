@@ -1,0 +1,70 @@
+=== Run information ===
+
+Scheme:       weka.clusterers.SimpleKMeans -init 0 -max-candidates 100 -periodic-pruning 10000 -min-density 2.0 -t1 -1.25 -t2 -1.0 -N 2 -A "weka.core.EuclideanDistance -R first-last" -I 500 -num-slots 1 -S 10
+Relation:     db-formated
+Instances:    641040
+Attributes:   20
+              course_id
+              final_cc_cname_DI
+              grade
+              nevents
+              ndays_act
+              nchapters
+Ignored:
+              userid_DI
+              registered
+              viewed
+              explored
+              certified
+              LoE_DI
+              YoB
+              gender
+              start_time_DI
+              last_event_DI
+              nplay_video
+              nforum_posts
+              roles
+              incomplete_flag
+Test mode:    evaluate on training data
+
+
+=== Clustering model (full training set) ===
+
+
+kMeans
+======
+
+Number of iterations: 7
+Within cluster sum of squared errors: 831252.2063715314
+
+Initial starting points (random):
+
+Cluster 0: MITx/6.00x/2013_Spring,Brazil,0,4,2,3.634597
+Cluster 1: MITx/14.73x/2013_Spring,'United States',0,431.073259,5.711002,3.634597
+
+Missing values globally replaced with mean/mode
+
+Final cluster centroids:
+                                                                               Cluster#
+Attribute                                              Full Data                      0                      1
+                                                      (641040.0)             (328949.0)             (312091.0)
+==============================================================================================================
+course_id                                    HarvardX/CS50x/2012 MITx/6.00x/2013_Spring    HarvardX/CS50x/2012
+final_cc_cname_DI                                  United States                  India          United States
+grade                                                      0.034                 0.0184                 0.0505
+nevents                                                 431.0733               258.9378               612.5068
+ndays_act                                                  5.711                 3.8913                  7.629
+nchapters                                                 3.6346                 3.1586                 4.1363
+
+
+
+
+Time taken to build model (full training data) : 1.57 seconds
+
+=== Model and evaluation on training set ===
+
+Clustered Instances
+
+0      328949 ( 51%)
+1      312091 ( 49%)
+
