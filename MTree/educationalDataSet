@@ -1,0 +1,9 @@
+// myMTree.toString();
+
+Nr clusters: 2
+Key:1,1,1,0,0,502,16,12,0 1,1,0,0,0,78,5,4,0 
+MTrees 
+======
+
+Number of instances: 280729
+Within cluster sum of squared errors: 35163.617667037346
