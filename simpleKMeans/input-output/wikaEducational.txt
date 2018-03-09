@@ -68,3 +68,13 @@ Clustered Instances
 0      328949 ( 51%)
 1      312091 ( 49%)
 
+
+===========================================================================
+
+Nr clusters: 2
+Key:HarvardX/CS50x/2012,'Other North & Central Amer., Caribbean',0,431.073259,5.711002,3.634597 MITx/3.091x/2012_Fall,Spain,0,60,1,1 
+MTrees 
+======
+
+Number of instances: 641040
+Within cluster sum of squared errors: 5438243.849059997
