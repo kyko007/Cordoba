@@ -7,3 +7,14 @@ MTrees
 
 Number of instances: 280729
 Within cluster sum of squared errors: 35163.617667037346
+
+
+2
+Insert end
+Nr clusters: 2
+Key:HarvardX/CS50x/2012,'United States',0,431.073259,9,1 HarvardX/CB22x/2013_Spring,'United States',0,431.073259,9,3.634597 
+MTrees 
+======
+
+Number of instances: 641040
+Within cluster sum of squared errors: 4628760.46578731
