@@ -1,0 +1,16 @@
+Name					MissingValues		Nominal
+
+Canopy					Yes			Yes
+cascadeKMeans   			Yes			Yes      
+Cobweb					??			??	// too slow to get the output
+DBSCAN					??			??	// too slow to get the output
+EM					Yes			Yes	// I do not know why it runs with nominal
+FarthestFirst				Yes			Yes
+FilteredClusterer(used KMeans)		Yes			Yes
+HierarchicalClusterer			??			?? 	// "Problem evaluating cluster: null" -error
+LVQ					Yes			Yes
+MakeDensityBasedCluster(used Kmeans)	Yes			Yes
+siB					No			No
+XMeans					Yes			No
+CLOPE					No			Yes
+
