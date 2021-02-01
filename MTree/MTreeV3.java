@@ -44,6 +44,7 @@ import weka.core.DistanceFunction;
 import weka.core.EuclideanDistance;
 import weka.core.Instance;
 import weka.core.Instances;
+import weka.core.ManhattanDistance;
 import weka.core.Option;
 import weka.core.SelectedTag;
 import weka.core.Tag;
@@ -189,13 +190,19 @@ TechnicalInformationHandler {
 	/**
 	 * replace missing values in training instances.
 	 */
-	private ReplaceMissingValues m_ReplaceMissingFilter;
+	private ReplaceMissingValues m_ReplaceMissingFilter = new ReplaceMissingValues();
 
 	/**
 	 * number of clusters to generate.
 	 */
 	private int m_NumClusters = 100;
-
+	
+	/**
+	 * number of nodes for each split
+	 * -1 means chosen by the split policy
+	 */
+	private int m_SplitNumber = -1;
+	
 	/**
 	 * holds the cluster centroids.
 	 */
@@ -222,10 +229,22 @@ TechnicalInformationHandler {
 		    new Tag(FARTHEST_FIRST, "Farthest first"), new Tag(HIERARCHICAL_CLUSTERER, "Hierarchical Clusterer") };
 	
 	protected int m_splitPolicy = CANOPY;
+	protected Clusterer split_policies[]= {new Canopy(), new CascadeSimpleKMeans(), new Cobweb(), new FarthestFirst(), new HierarchicalClusterer()};
 	
 	protected double m_CobWebAcuity = 0.1;
 	protected double m_CobWebCutoff = 1;
 	
+	public static final int EuclideanDistance = 0;
+	public static final int ChebyshevDistance = 1;
+	public static final int FilteredDistance = 2;
+	public static final int ManhattanDistance = 3;
+	public static final int MinkowskiDistance = 4;
+	
+	public static final Tag[] DISTANCE_SELECTION = { new Tag(EuclideanDistance, "EuclideanDistance"),
+		    new Tag(ChebyshevDistance, "ChebyshevDistance"), new Tag(FilteredDistance, "FilteredDistance"),
+		    new Tag(ManhattanDistance, "ManhattanDistance"), new Tag(MinkowskiDistance, "MinkowskiDistance") };
+	
+	 protected int m_DistanceFunctionID = EuclideanDistance;
 	
 	/**
 	 * The number of instances in each cluster.
@@ -265,7 +284,16 @@ TechnicalInformationHandler {
 		super();
 
 		m_SeedDefault = 0;
+		m_SplitNumber = -1;
 		setSeed(m_SeedDefault);
+		try {
+			setNumClusters(10);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		setDistanceFunction(new SelectedTag(MTree.EuclideanDistance, MTree.DISTANCE_SELECTION));
+		setSplitPolicy(new SelectedTag(MTree.CANOPY, MTree.TAGS_SELECTION));
 	}
 
 
@@ -317,27 +345,95 @@ TechnicalInformationHandler {
 	 */
 	@Override
 	public Enumeration listOptions() {
-		Vector result = new Vector();
+		Vector<Option> result = new Vector<Option>();
 
-		result.addElement(new Option("\tnumber of clusters.\n" + "\t(default 100).",
+		result.addElement(new Option("\tnumber of clusters.\n" + "\t(default 10).",
 				"N", 1, "-N <num>"));
+		
+		result.addElement(new Option("\trandom number seed.\n (default 10)"
+			     , "S", 1, "-S <num>"));
 		
 		result.addElement(new Option(
 			      "\tSplit policy to use.\n\t0 = Canopy, 1 = CascadeSimpleKMeans, "
 			        + "2 = CobWeb, 3 = farthest first, 4 = HierarchicalClusterer.\n\t(default = 0)", "split", 1,
 			      "-split"));
+		
+		result.addElement(new Option("\tnumber to split a node.\n (default -1)",
+				"Nsplit", -1, "-NSplit <num>"));
 
 		result.add(new Option("\tDistance function to use.\n"
-				+ "\t(default: weka.core.EuclideanDistance)", "A", 1,
-				"-A <classname and options>"));
+				+ "\t(default: weka.core.EuclideanDistance)\t0 = EuclideanDistance, 1 = ChebyshevDistance, "
+				+ "2 = FilteredDistance, 3 = ManhattanDistance, 4 = MinkowskiDistance", "A", 1,
+				"-A <num>"));
 
 		Enumeration en = super.listOptions();
 		while (en.hasMoreElements()) {
-			result.addElement(en.nextElement());
+			result.addElement((Option) en.nextElement());
 		}
 
 		return result.elements();
 	}
+	
+	public void setOptions (String[] options)
+		    throws Exception {
+
+		    String optionString = Utils.getOption('N', options);
+
+		    if (optionString.length() != 0) {
+		      setNumClusters(Integer.parseInt(optionString));
+		    }
+
+		    optionString = Utils.getOption('S', options);
+		    
+		    if (optionString.length() != 0) {
+		      setSeed(Integer.parseInt(optionString));
+		    }
+		    
+		    optionString = Utils.getOption("split", options);
+		    
+		    if (optionString.length() != 0) {
+		      setSplitPolicy(new SelectedTag(Integer.parseInt(optionString), MTree.TAGS_SELECTION));
+		    }
+		    
+		    optionString = Utils.getOption("Nsplit", options);
+		    
+		    if (optionString.length() != 0) {
+		      setSplitNumber(Integer.parseInt(optionString));
+		    }
+		    
+		    optionString = Utils.getOption("A", options);
+		    
+		    if (optionString.length() != 0) {
+		      setDistanceFunction(new SelectedTag(Integer.parseInt(optionString), MTree.DISTANCE_SELECTION));
+		    }
+		  }
+	
+	public String[] getOptions () {
+	    String[] options = new String[10];
+	    int current = 0;
+	    
+	    options[current++] = "-N";
+	    options[current++] = "" + getNumClusters();
+	    options[current++] = "-S";
+	    options[current++] = "" + getSeed();
+	    options[current++] = "-split";
+	    options[current++] = "" + getSplitPolicy();
+	    options[current++] = "-Nsplit";
+	    options[current++] = "" + getSplitNumber();
+	    options[current++] = "-A";
+	    options[current++] = "" + m_DistanceFunctionID;
+	    
+	    while (current < options.length) {
+	      options[current++] = "";
+	    }
+
+	    return  options;
+	  }
+
+	private int getSplitNumber() {
+		return m_SplitNumber;
+	}
+
 
 	public void mTreeInsert(MTreeBean tree, Instance inst) {
 		/**
@@ -390,31 +486,21 @@ TechnicalInformationHandler {
 		while (!node.isLeaf){
 			int i,idx = 0;
 			Double d = Double.MAX_VALUE;
+			Double min = Double.MAX_VALUE;	
 
-			if(node.nrKeys > 0) {
+			for (i = 0; i < node.nrKeys; i++) {
+				if (node.instances.get(i) == null)
+					node.instances.set(i, new DenseInstance(train.numAttributes()));
 
-				Double min = m_DistanceFunction.distance(inst, node.instances.get(0));
+				Instance indexInstance = node.instances.get(i);
+				d = m_DistanceFunction.distance(inst, indexInstance);
 
-				for (i = 0; i < node.nrKeys; i++) {
-					if (node.instances.get(i) == null)
-						node.instances.set(i, new DenseInstance(train.numAttributes()));
-
-					Instance indexInstance = node.instances.get(i);
-					try
-					{
-						d = m_DistanceFunction.distance(inst, indexInstance);
-
-						if (d < min){
-							min = d;
-							idx = i;
-						}
-					}
-					catch(ArrayIndexOutOfBoundsException e)
-					{
-						i++;
-					}
+				if (d < min){
+					min = d;
+					idx = i;
 				}
-			}    
+			}
+		    
 
 			if  (node.nrKeys < m_NumClusters && node.nrKeys > 0 && node.instances.size() > 0) { 
 				ClusterEvaluation eval = voteKClustering(node.routes.get(idx));
@@ -427,20 +513,17 @@ TechnicalInformationHandler {
 						else
 							splitOut = splitNode(node.routes.get(idx), m_NumClusters - node.nrKeys + 1); //minim 2 clustere.
 
-						for(int index = 0; index < splitOut.clusters.size(); index++)				
-							if(index == 0)
-							{
-								node.routes.set(idx, splitOut.clusters.get(index));
-								node.instances.set(idx, splitOut.centers.get(index));
-								node.radix.set(idx, splitOut.radix.get(index));
-							}
-							else
-							{
-								node.routes.add(idx + index, splitOut.clusters.get(index));
-								node.instances.add(idx + index, splitOut.centers.get(index));
-								node.radix.add(idx + index, splitOut.radix.get(index));
-								node.nrKeys++;
-							}
+						node.routes.set(idx, splitOut.clusters.get(0));
+						node.instances.set(idx, splitOut.centers.get(0));
+						node.radix.set(idx, splitOut.radix.get(0));
+						
+						for(int index = 1; index < splitOut.clusters.size(); index++)				
+						{
+							node.routes.add(idx + index, splitOut.clusters.get(index));
+							node.instances.add(idx + index, splitOut.centers.get(index));
+							node.radix.add(idx + index, splitOut.radix.get(index));
+							node.nrKeys++;
+						}
 					}
 				}
 			}
@@ -513,54 +596,27 @@ TechnicalInformationHandler {
 		numberOfIterations++;
 
 		VoteK clusterer = new VoteK();
+		int prediction = 0;
 		ClusterEvaluation eval = new ClusterEvaluation();
 		Instances nodeInstances = arrayInstanceToInstances(node.instances);
 		
 		try {
 			if(nodeInstances.numInstances() > 0)
 			{
+				
 				clusterer.setNumClusters(m_NumClusters);
 				clusterer.buildClusterer(nodeInstances);
-				int prediction = clusterer.getPrediction();
+				prediction = clusterer.getPrediction();
 				
-				if(m_splitPolicy == 0) 
+				if(prediction > 1 && m_SplitNumber != -1)
 				{
-					 Canopy splitPolicyClusterer = new Canopy();
-					 splitPolicyClusterer.setNumClusters(prediction);
-					 splitPolicyClusterer.buildClusterer(nodeInstances);
-					 eval.setClusterer(splitPolicyClusterer);
-				}
-				if(m_splitPolicy == 1)
-				{
-					CascadeSimpleKMeans splitPolicyClusterer = new CascadeSimpleKMeans();
-					splitPolicyClusterer.setMinNumClusters(prediction);
-					splitPolicyClusterer.setMaxNumClusters(prediction);
-					splitPolicyClusterer.buildClusterer(nodeInstances);
-					eval.setClusterer(splitPolicyClusterer);
-				}
-				if(m_splitPolicy == 2)
-				{
-					Cobweb splitPolicyClusterer = new Cobweb();
-					splitPolicyClusterer.setAcuity(m_CobWebAcuity);
-					splitPolicyClusterer.setCutoff(m_CobWebCutoff);
-					splitPolicyClusterer.buildClusterer(nodeInstances);
-					eval.setClusterer(splitPolicyClusterer);
-				}
-				if(m_splitPolicy == 3)
-				{
-					FarthestFirst splitPolicyClusterer = new FarthestFirst();
-					splitPolicyClusterer.setNumClusters(prediction);
-					splitPolicyClusterer.buildClusterer(nodeInstances);
-					eval.setClusterer(splitPolicyClusterer);
-				}
-				if(m_splitPolicy == 4)
-				{
-					HierarchicalClusterer splitPolicyClusterer = new HierarchicalClusterer();
-					splitPolicyClusterer.setNumClusters(prediction);
-					splitPolicyClusterer.buildClusterer(nodeInstances);
-					eval.setClusterer(splitPolicyClusterer);
+					prediction = m_SplitNumber;
 				}
 				
+				Clusterer splitPolicyClusterer = getClusterer(prediction);
+				
+				splitPolicyClusterer.buildClusterer(nodeInstances);
+				eval.setClusterer(splitPolicyClusterer);
 				eval.evaluateClusterer(nodeInstances);
 			}
 		}                       
@@ -573,6 +629,46 @@ TechnicalInformationHandler {
 		}
 		return eval;
 	}
+
+	private Clusterer getClusterer(int prediction) throws Exception {
+		
+		Clusterer splitPolicy = null;
+		
+		if(m_splitPolicy == 0) 
+		{
+			 Canopy splitPolicyClusterer = new Canopy();
+			 splitPolicyClusterer.setNumClusters(prediction);
+			 splitPolicy = splitPolicyClusterer;
+		}
+		if(m_splitPolicy == 1)
+		{
+			CascadeSimpleKMeans splitPolicyClusterer = new CascadeSimpleKMeans();
+			splitPolicyClusterer.setMinNumClusters(prediction);
+			splitPolicyClusterer.setMaxNumClusters(prediction);
+			splitPolicy = splitPolicyClusterer;
+		}
+		if(m_splitPolicy == 2)
+		{
+			Cobweb splitPolicyClusterer = new Cobweb();
+			splitPolicyClusterer.setAcuity(m_CobWebAcuity);
+			splitPolicyClusterer.setCutoff(m_CobWebCutoff);
+			splitPolicy = splitPolicyClusterer;
+		}
+		if(m_splitPolicy == 3)
+		{
+			FarthestFirst splitPolicyClusterer = new FarthestFirst();
+			splitPolicyClusterer.setNumClusters(prediction);
+			splitPolicy = splitPolicyClusterer;
+		}
+		if(m_splitPolicy == 4)
+		{
+			HierarchicalClusterer splitPolicyClusterer = new HierarchicalClusterer();
+			splitPolicyClusterer.setNumClusters(prediction);
+			splitPolicy = splitPolicyClusterer;
+		}
+		return splitPolicy;
+	}
+
 
 	public SplitOutput splitNode(Node node, ClusterEvaluation eval) {
 		SplitOutput splitOutput = new SplitOutput();
@@ -607,37 +703,10 @@ TechnicalInformationHandler {
 		try{
 			numberOfIterations++;
 			
-			if(m_splitPolicy == 0) 
-			{
-				 Canopy splitPolicyClusterer = new Canopy();
-				 splitPolicyClusterer.buildClusterer(nodeInstances);
-				 eval.setClusterer(splitPolicyClusterer);
-			}
-			if(m_splitPolicy == 1)
-			{
-				CascadeSimpleKMeans splitPolicyClusterer = new CascadeSimpleKMeans();
-				splitPolicyClusterer.buildClusterer(nodeInstances);
-				eval.setClusterer(splitPolicyClusterer);
-			}
-			if(m_splitPolicy == 2)
-			{
-				Cobweb splitPolicyClusterer = new Cobweb();
-				splitPolicyClusterer.buildClusterer(nodeInstances);
-				eval.setClusterer(splitPolicyClusterer);
-			}
-			if(m_splitPolicy == 3)
-			{
-				FarthestFirst splitPolicyClusterer = new FarthestFirst();
-				splitPolicyClusterer.buildClusterer(nodeInstances);
-				eval.setClusterer(splitPolicyClusterer);
-			}
-			if(m_splitPolicy == 4)
-			{
-				HierarchicalClusterer splitPolicyClusterer = new HierarchicalClusterer();
-				splitPolicyClusterer.buildClusterer(nodeInstances);
-				eval.setClusterer(splitPolicyClusterer);
-			}
-
+			Clusterer splitPolicyClusterer = split_policies[m_splitPolicy];
+			
+			splitPolicyClusterer.buildClusterer(nodeInstances);
+			eval.setClusterer(splitPolicyClusterer);
 			eval.evaluateClusterer(nodeInstances);
 
 			splitOutput.clusters = getClustersFromVoteK(eval.getClusterAssignments(), node, eval.getNumClusters());
@@ -754,11 +823,12 @@ TechnicalInformationHandler {
 		numberOfIterations = 0;
 		
 		//replace missing values
-		m_ReplaceMissingFilter = new ReplaceMissingValues();
 		m_ReplaceMissingFilter.setInputFormat(data);
 		this.train = Filter.useFilter(data, m_ReplaceMissingFilter);
 		data = Filter.useFilter(data, m_ReplaceMissingFilter);
-		//this.train = data;
+		
+		String[] opt = getOptions();
+		setOptions(opt);
 		
 		if(m_SeedDefault != 0)
 		{
@@ -766,7 +836,7 @@ TechnicalInformationHandler {
 		}
 		
 		
-		m_DistanceFunction = new EuclideanDistance();
+		m_DistanceFunction = setDistance();
 		m_DistanceFunction.setInstances(train);
 		
 		if(m_NumClusters == -1)
@@ -777,14 +847,11 @@ TechnicalInformationHandler {
 		}
 		
 		startTime = System.currentTimeMillis();
+		System.out.println("Insert start");
 		
 		if(m_SeedOptimisation)
 		{
 			seedOptimisation(data);		
-		}
-		System.out.println("Insert start");
-		if(testCentroids != null)
-		{
 			for(int i = 0; i < testCentroids.numInstances(); i ++)
 			{
 				mTreeInsert(mTree, testCentroids.instance(i));
@@ -796,7 +863,13 @@ TechnicalInformationHandler {
 		}
 
 		System.out.println("Insert end");
+		
+		clusterData(data);
+		
+		stopTime = System.currentTimeMillis();
+	}
 
+	private void clusterData(Instances data) {
 		int[] clusterAssignments = new int[data.numInstances()];
 		m_squaredErrors = new double[mTree.root.instances.size()];
 		// calculate errors
@@ -819,8 +892,9 @@ TechnicalInformationHandler {
 			m_Assignments = clusterAssignments;
 
 		m_NumClusters = mTree.root.nrKeys;
-		stopTime = System.currentTimeMillis();
+		
 	}
+
 
 	/**
 	 * return a string describing this clusterer.
@@ -992,61 +1066,56 @@ TechnicalInformationHandler {
 	
 	      Random gen = new Random();
 	      int choose = 0;
-	
-	      for (int c = 0; c < m_NumClusters; c++) {
-	
-	         // first centroid: choose any data point
-	         if (c == 0)
-	            choose = gen.nextInt(data.numInstances() - 1);
-	
-	         // after first centroid, use a weighted distribution
-	         else {
-	
-	            // check if the most recently added centroid is closer to any of the points than previously added ones
-	            for (int p = 0; p < data.numInstances(); p++) 
-	            {
-	               // gives chosen points 0 probability of being chosen again -> sampling without replacement
-	               double tempDistance = Math.pow(m_DistanceFunction.distance(data.get(p), centroids.get(c - 1)), 2); 
-	
-	               // base case: if we have only chosen one centroid so far, nothing to compare to
-	               if (c == 1)
-	               {
-	                  distToClosestCentroid[p] = tempDistance;
-	               }
-	               else 
-	               { // c != 1 
-	                  if (tempDistance < distToClosestCentroid[p])
-	                  {
-	                	  distToClosestCentroid[p] = tempDistance;
-	                  }
-	               }
-	
-	               if (p == 0)
-	               {
-	            	   weightedDistribution[0] = distToClosestCentroid[0];
-	               }
-	               else
-	          	   {
-	            	   weightedDistribution[p] = weightedDistribution[p-1] + distToClosestCentroid[p];
-	           	   }
-	
-	            }
-	
-	            // choose the next centroid
-	            double rand = gen.nextDouble();
-	            for (int j = data.numInstances() - 1; j > 0; j--) 
-	            {
-	              
-	            	if (rand > weightedDistribution[j - 1] / weightedDistribution[data.numInstances() - 1]) 
-	            	{ 
-	                  choose = j; // one bigger than the one above
-	                  break;
-	               }
-	               else // Because of invalid dimension errors, we can't make the for loop go to j2 > -1 when we have (j2-1) in the loop.
-	                  choose = 0;
-	            }
-	         }  
-	         
+	      
+	      // first centroid: choose any data point
+	      choose = gen.nextInt(data.numInstances() - 1);
+	      centroids.add(data.get(choose));
+	      
+	      for (int c = 1; c < m_NumClusters; c++) {
+	        // after first centroid, use a weighted distribution
+            // check if the most recently added centroid is closer to any of the points than previously added ones
+            for (int p = 0; p < data.numInstances(); p++) 
+            {
+               // gives chosen points 0 probability of being chosen again -> sampling without replacement
+               double tempDistance = Math.pow(m_DistanceFunction.distance(data.get(p), centroids.get(c - 1)), 2); 
+
+               // base case: if we have only chosen one centroid so far, nothing to compare to
+               if (c == 1)
+               {
+                  distToClosestCentroid[p] = tempDistance;
+               }
+               else 
+               { // c != 1 
+                  if (tempDistance < distToClosestCentroid[p])
+                  {
+                	  distToClosestCentroid[p] = tempDistance;
+                  }
+               }
+
+               if (p == 0)
+               {
+            	   weightedDistribution[0] = distToClosestCentroid[0];
+               }
+               else
+          	   {
+            	   weightedDistribution[p] = weightedDistribution[p-1] + distToClosestCentroid[p];
+           	   }
+
+            }
+
+            // choose the next centroid
+            double rand = gen.nextDouble();
+            for (int j = data.numInstances() - 1; j > 0; j--) 
+            {
+              
+            	if (rand > weightedDistribution[j - 1] / weightedDistribution[data.numInstances() - 1]) 
+            	{ 
+                  choose = j; // one bigger than the one above
+                  break;
+               }
+               else // Because of invalid dimension errors, we can't make the for loop go to j2 > -1 when we have (j2-1) in the loop.
+                  choose = 0;
+            }
 	         // store the chosen centroid
 	         centroids.add(data.get(choose));
 	      }
@@ -1269,9 +1338,7 @@ TechnicalInformationHandler {
 		boolean found =  false;
 		for(int l = 0;  l < NNArrayElements.size(); l++)
 		{
-			if(NNArrayElements.get(l).hashCode() == e.hashCode())
-				found = true;
-			if(e.radix == NNArrayElements.get(l).radix)
+			if(NNArrayElements.get(l).hashCode() == e.hashCode() || e.radix == NNArrayElements.get(l).radix)
 				found = true;
 		}
 		if(i != NNArrayElements.size() - 1 && !NNArrayElements.contains(e) && !found)
@@ -1288,15 +1355,14 @@ TechnicalInformationHandler {
 		while(i != NNArrayElements.size() - 1)
 		{
 			if(NNArrayElements.get(i).center == parent && NNArrayElements.get(i).isPlaceHolder)
+			{
+				//remove it
+				NNArrayElements.remove(i);
 				break;
+			}
 			i++;
 		}
 
-		/* remove it */
-		if(i != NNArrayElements.size() - 1)
-		{
-			NNArrayElements.remove(i);
-		}	
 	}
 
 	/**
@@ -1332,11 +1398,49 @@ TechnicalInformationHandler {
 		m_NumClusters = n;
 	}
 	
+	public DistanceFunction setDistance()
+	{
+		DistanceFunction f = new EuclideanDistance();
+		if(m_DistanceFunctionID == 0)
+		{
+			f = new EuclideanDistance();
+		}
+		if(m_DistanceFunctionID == 1)
+		{
+			f = new weka.core.ChebyshevDistance();
+		}
+		if(m_DistanceFunctionID == 2)
+		{
+			f = new weka.core.FilteredDistance();
+		}
+		if(m_DistanceFunctionID == 3)
+		{
+			f = new ManhattanDistance();
+		}
+		if(m_DistanceFunctionID == 4)
+		{
+			f = new weka.core.MinkowskiDistance();
+		}
+		
+		return f;
+	}
+	
 	public void setSplitPolicy(SelectedTag method) {
 	    if (method.getTags() == TAGS_SELECTION) {
 	      m_splitPolicy = method.getSelectedTag().getID();
 	    }
 	  }
+	
+	public void setDistanceFunction(SelectedTag method) {
+	    if (method.getTags() == DISTANCE_SELECTION) {
+		      m_DistanceFunctionID = method.getSelectedTag().getID();
+		    }
+		  }
+	
+	public void setSplitNumber(int number)
+	{
+		m_SplitNumber = number;
+	}
 	
 	public SelectedTag getSplitPolicy() {
 	    return new SelectedTag(m_splitPolicy, TAGS_SELECTION);
